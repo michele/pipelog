@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"math"
 	"os"
 	"sort"
 	"strconv"
@@ -197,6 +198,7 @@ type statLine struct {
 	data  []float64
 	ntile float64
 	avg   float64
+	std   float64
 	min   float64
 	max   float64
 	reqs  int
@@ -209,11 +211,17 @@ func newStatLine(key string, data []float64) *statLine {
 	for _, value := range data {
 		total += value
 	}
+	avg := total / float64(len(data))
+	total = 0
+	for _, value := range data {
+		total += math.Pow(value-avg, 2.0)
+	}
 	return &statLine{
 		key:   key,
 		data:  data,
 		ntile: data[tile],
-		avg:   total / float64(len(data)),
+		avg:   avg,
+		std:   math.Sqrt(total / float64(len(data))),
 		min:   data[0],
 		max:   data[len(data)-1],
 		reqs:  len(data),
@@ -221,11 +229,11 @@ func newStatLine(key string, data []float64) *statLine {
 }
 
 func (sl statLine) String() string {
-	return fmt.Sprintf("%s: %d reqs; avg. %fms; min. %fms; max. %fms; 95th %fms", sl.key, sl.reqs, sl.avg, sl.min, sl.max, sl.ntile)
+	return fmt.Sprintf("%s: %d reqs; avg. %.2fms; std.dev. %.2fms, min. %.2fms; max. %.2fms; 95th %.2fms", sl.key, sl.reqs, sl.avg, sl.std, sl.min, sl.max, sl.ntile)
 }
 
 func StatLineHeaders(title string) []string {
-	return []string{title, "Reqs", "Avg", "Min", "Max", "95th"}
+	return []string{title, "Reqs", "Avg", "Std Dev", "Min", "Max", "95th"}
 }
 
 func (sl statLine) Array() []string {
@@ -233,6 +241,7 @@ func (sl statLine) Array() []string {
 		sl.key,
 		fmt.Sprintf("%d", sl.reqs),
 		fmt.Sprintf("%.3fms", sl.avg),
+		fmt.Sprintf("%.3fms", sl.std),
 		fmt.Sprintf("%.3fms", sl.min),
 		fmt.Sprintf("%.3fms", sl.max),
 		fmt.Sprintf("%.3fms", sl.ntile),
