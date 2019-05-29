@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/PaesslerAG/jsonpath"
+	"github.com/olekukonko/tablewriter"
 	"gopkg.in/alecthomas/kingpin.v2"
 )
 
@@ -149,8 +150,8 @@ func main() {
 		addDuration(durations, reqTime.Format(timeOutput), reqDuration)
 		addDuration(uris, cleanURI(reqURI), reqDuration)
 	}
-	printMap("Requests by day", durations, false, 0)
-	printMap("Top URIs", uris, true, 20)
+	printMap("Day", durations, false, 0)
+	printMap("URI", uris, true, 20)
 }
 
 func addNamespace(ns, path *string) *string {
@@ -182,12 +183,13 @@ func printMap(title string, theMap map[string][]float64, sorted bool, limit int)
 	if limit == 0 || limit > len(lines) {
 		limit = len(lines)
 	}
-	fmt.Println(title)
-	fmt.Println("==================================================")
+	table := tablewriter.NewWriter(os.Stdout)
+	table.SetHeader(StatLineHeaders(title))
+
 	for i := 0; i < limit; i++ {
-		fmt.Println(lines[i].String())
+		table.Append(lines[i].Array())
 	}
-	fmt.Println("==================================================\n")
+	table.Render()
 }
 
 type statLine struct {
@@ -220,4 +222,19 @@ func newStatLine(key string, data []float64) *statLine {
 
 func (sl statLine) String() string {
 	return fmt.Sprintf("%s: %d reqs; avg. %fms; min. %fms; max. %fms; 95th %fms", sl.key, sl.reqs, sl.avg, sl.min, sl.max, sl.ntile)
+}
+
+func StatLineHeaders(title string) []string {
+	return []string{title, "Reqs", "Avg", "Min", "Max", "95th"}
+}
+
+func (sl statLine) Array() []string {
+	return []string{
+		sl.key,
+		fmt.Sprintf("%d", sl.reqs),
+		fmt.Sprintf("%.3fms", sl.avg),
+		fmt.Sprintf("%.3fms", sl.min),
+		fmt.Sprintf("%.3fms", sl.max),
+		fmt.Sprintf("%.3fms", sl.ntile),
+	}
 }
