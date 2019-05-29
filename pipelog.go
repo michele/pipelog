@@ -25,6 +25,7 @@ var (
 	piped     bool
 	duration  = kingpin.Flag("duration", "Path to request duration").Short('d').Default("duration").String()
 	uri       = kingpin.Flag("uri", "Path to request uri").Short('u').Default("uri").String()
+	method    = kingpin.Flag("method", "Path to request method").Short('m').Default("method").String()
 	ts        = kingpin.Flag("time", "Path to request timestamp").Short('t').Default("time").String()
 	ns        = kingpin.Flag("namespace", "JSON path to apply to all other fields").Short('n').Default("$").String()
 	file      = kingpin.Flag("file", "Log file to be parsed").ExistingFile()
@@ -41,6 +42,7 @@ func main() {
 		reqDuration float64
 		reqTime     time.Time
 		reqURI      string
+		reqMethod   string
 		ok          bool
 		err         error
 		input       []byte
@@ -53,6 +55,7 @@ func main() {
 		duration = addNamespace(ns, duration)
 		ts = addNamespace(ns, ts)
 		uri = addNamespace(ns, uri)
+		method = addNamespace(ns, method)
 	}
 
 	info, err := os.Stdin.Stat()
@@ -125,6 +128,24 @@ func main() {
 			continue
 		}
 
+		tmpData, err = jsonpath.Get(*method, tmpIf)
+		if err != nil {
+			if *fail {
+				fmt.Println(err)
+				os.Exit(1)
+			}
+			continue
+		}
+
+		reqMethod, ok = tmpData.(string)
+		if !ok {
+			if *fail {
+				fmt.Println("Couldn't parse method")
+				os.Exit(1)
+			}
+			continue
+		}
+
 		tmpData, err = jsonpath.Get(*ts, tmpIf)
 		if err != nil {
 			if *fail {
@@ -151,7 +172,7 @@ func main() {
 		}
 
 		addDuration(durations, reqTime.Format(timeOutput), reqDuration)
-		addDuration(uris, cleanURI(reqURI, *mergeUUID), reqDuration)
+		addDuration(uris, fmt.Sprintf("%s %s", reqMethod, cleanURI(reqURI, *mergeUUID)), reqDuration)
 	}
 	printMap("Day", durations, false, 0)
 	printMap("URI", uris, true, 20)
