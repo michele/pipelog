@@ -8,6 +8,7 @@ import (
 	"log"
 	"math"
 	"os"
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -21,14 +22,16 @@ import (
 var timeOutput = "2006-01-02"
 
 var (
-	piped    bool
-	duration = kingpin.Flag("duration", "Path to request duration").Short('d').Default("duration").String()
-	uri      = kingpin.Flag("uri", "Path to request uri").Short('u').Default("uri").String()
-	ts       = kingpin.Flag("time", "Path to request timestamp").Short('t').Default("time").String()
-	ns       = kingpin.Flag("namespace", "JSON path to apply to all other fields").Short('n').Default("$").String()
-	file     = kingpin.Flag("file", "Log file to be parsed").ExistingFile()
-	grouped  = kingpin.Flag("grouped", "Whether request should be grouped by uri").Short('g').Bool()
-	fail     = kingpin.Flag("fail", "Fail if an error occurs while parsing a single line").Short('F').Bool()
+	piped     bool
+	duration  = kingpin.Flag("duration", "Path to request duration").Short('d').Default("duration").String()
+	uri       = kingpin.Flag("uri", "Path to request uri").Short('u').Default("uri").String()
+	method    = kingpin.Flag("method", "Path to request method").Short('m').Default("method").String()
+	ts        = kingpin.Flag("time", "Path to request timestamp").Short('t').Default("time").String()
+	ns        = kingpin.Flag("namespace", "JSON path to apply to all other fields").Short('n').Default("$").String()
+	file      = kingpin.Flag("file", "Log file to be parsed").ExistingFile()
+	grouped   = kingpin.Flag("grouped", "Whether request should be grouped by uri").Short('g').Bool()
+	fail      = kingpin.Flag("fail", "Fail if an error occurs while parsing a single line").Short('F').Bool()
+	mergeUUID = kingpin.Flag("merge-uuid", "If a UUID is found in the URI, hide it and merge URIs with same structure but different UUIDs").Short('U').Bool()
 )
 
 func main() {
@@ -39,6 +42,7 @@ func main() {
 		reqDuration float64
 		reqTime     time.Time
 		reqURI      string
+		reqMethod   string
 		ok          bool
 		err         error
 		input       []byte
@@ -51,6 +55,7 @@ func main() {
 		duration = addNamespace(ns, duration)
 		ts = addNamespace(ns, ts)
 		uri = addNamespace(ns, uri)
+		method = addNamespace(ns, method)
 	}
 
 	info, err := os.Stdin.Stat()
@@ -123,6 +128,24 @@ func main() {
 			continue
 		}
 
+		tmpData, err = jsonpath.Get(*method, tmpIf)
+		if err != nil {
+			if *fail {
+				fmt.Println(err)
+				os.Exit(1)
+			}
+			continue
+		}
+
+		reqMethod, ok = tmpData.(string)
+		if !ok {
+			if *fail {
+				fmt.Println("Couldn't parse method")
+				os.Exit(1)
+			}
+			continue
+		}
+
 		tmpData, err = jsonpath.Get(*ts, tmpIf)
 		if err != nil {
 			if *fail {
@@ -149,7 +172,7 @@ func main() {
 		}
 
 		addDuration(durations, reqTime.Format(timeOutput), reqDuration)
-		addDuration(uris, cleanURI(reqURI), reqDuration)
+		addDuration(uris, fmt.Sprintf("%s %s", reqMethod, cleanURI(reqURI, *mergeUUID)), reqDuration)
 	}
 	printMap("Day", durations, false, 0)
 	printMap("URI", uris, true, 20)
@@ -169,7 +192,12 @@ func addDuration(theMap map[string][]float64, key string, duration float64) {
 	theMap[key] = reqs
 }
 
-func cleanURI(uri string) string {
+var maskUUID = regexp.MustCompile("([a-fA-F0-9]{8}-[a-fA-F0-9]{4}-4[a-fA-F0-9]{3}-[8|9|aA|bB][a-fA-F0-9]{3}-[a-fA-F0-9]{12})")
+
+func cleanURI(uri string, merge bool) string {
+	if merge {
+		uri = maskUUID.ReplaceAllString(uri, ":uuid")
+	}
 	return strings.Split(uri, "?")[0]
 }
 
