@@ -28,7 +28,7 @@ var (
 	method    = kingpin.Flag("method", "Path to request method").Short('m').Default("method").String()
 	ts        = kingpin.Flag("time", "Path to request timestamp").Short('t').Default("time").String()
 	ns        = kingpin.Flag("namespace", "JSON path to apply to all other fields").Short('n').Default("$").String()
-	file      = kingpin.Flag("file", "Log file to be parsed").ExistingFile()
+	file      = kingpin.Flag("file", "Log file to be parsed").Short('f').ExistingFile()
 	grouped   = kingpin.Flag("grouped", "Whether request should be grouped by uri").Short('g').Bool()
 	fail      = kingpin.Flag("fail", "Fail if an error occurs while parsing a single line").Short('F').Bool()
 	mergeUUID = kingpin.Flag("merge-uuid", "If a UUID is found in the URI, hide it and merge URIs with same structure but different UUIDs").Short('U').Bool()
@@ -46,6 +46,7 @@ func main() {
 		ok          bool
 		err         error
 		input       []byte
+		reader      *bufio.Reader
 	)
 	kingpin.UsageTemplate(kingpin.CompactUsageTemplate).Version("1.0").Author("Michele Finotto")
 	kingpin.CommandLine.Help = "Pipelog"
@@ -58,20 +59,27 @@ func main() {
 		method = addNamespace(ns, method)
 	}
 
-	info, err := os.Stdin.Stat()
-	if err != nil {
-		panic(err)
-	}
+	if len(*file) != 0 {
+		f, err := os.Open(*file)
+		if err != nil {
+			panic(err)
+		}
+		reader = bufio.NewReader(f)
+	} else {
+		info, err := os.Stdin.Stat()
+		if err != nil {
+			panic(err)
+		}
 
-	if info.Mode()&os.ModeCharDevice != 0 && len(*file) == 0 {
-		fmt.Println("You should either pipe something into pipelog or specify and existing file to parse")
-		// return
+		if info.Mode()&os.ModeCharDevice != 0 {
+			fmt.Println("You should either pipe something into pipelog or specify and existing file to parse")
+			return
+		}
+		reader = bufio.NewReader(os.Stdin)
 	}
 
 	durations := map[string][]float64{}
 	uris := map[string][]float64{}
-
-	reader := bufio.NewReader(os.Stdin)
 
 	for {
 		input, err = reader.ReadBytes('\n')
