@@ -216,6 +216,8 @@ func printMap(title string, theMap map[string][]float64, sorted bool, limit int)
 	}
 	if sorted {
 		sort.Slice(lines, func(i, j int) bool { return lines[i].reqs > lines[j].reqs })
+	} else {
+		sort.Slice(lines, func(i, j int) bool { return lines[i].key < lines[j].key })
 	}
 	if limit == 0 || limit > len(lines) {
 		limit = len(lines)
